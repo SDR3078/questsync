@@ -54,8 +54,26 @@ Both are at <https://habitica.com/user/settings/api>. You'll get two task lists:
 | `QUESTSYNC_LOGIN_TTL` | `300` | Seconds to trust a validated login before re-checking |
 | `QUESTSYNC_CLIENT_AUTHOR` | *(user's id)* | Fixed `x-client` author id |
 | `QUESTSYNC_DEMO` | *(off)* | `1` = offline fixture + accept any login (dev/CI) |
+| `QUESTSYNC_ACCESS_POLICY` | `allowall` | Who may log in: `allowall` / `allowlist` / `http` |
+| `QUESTSYNC_ALLOWLIST` | — | *(allowlist)* comma-separated allowed Habitica User IDs |
+| `QUESTSYNC_ALLOWLIST_FILE` | — | *(allowlist)* file of IDs, one per line, re-read live |
+| `QUESTSYNC_ACCESS_HTTP_URL` | — | *(http)* endpoint asked `GET ?user=<id>` (`200`=allow) |
 
 The server needs **no Habitica credentials of its own** — users bring theirs.
+
+### Access control
+
+By default (`allowall`) anyone with valid Habitica credentials may log in. To
+restrict an instance, set `QUESTSYNC_ACCESS_POLICY`:
+
+- **`allowlist`** — a static set of Habitica User IDs from `QUESTSYNC_ALLOWLIST`
+  and/or `QUESTSYNC_ALLOWLIST_FILE` (one id per line, **re-read live** — a mounted
+  ConfigMap edit applies without a restart).
+- **`http`** — delegate to an external endpoint (`GET <url>?user=<id>`; `200` =
+  allow, `403`/`404` = deny) — the hook for a hosted/paid control plane.
+
+The gate runs on the **User ID, before** the Habitica credential check, so a denied
+user never triggers a Habitica call. Policies can only *deny*, never grant.
 
 ## Security
 
@@ -96,5 +114,6 @@ docker compose up -d && bash scripts/live-multiuser-verify.sh
 
 ## Roadmap
 - ✅ Multi-user, bidirectional todos + dailies — live-verified.
-- ✅ CI builds & publishes the image to GHCR.
+- ✅ CI builds & publishes to GHCR and auto-rolls the deploy via ArgoCD.
+- ✅ Optional access gate (allowlist / external `http` policy).
 - ⬜ Real subtasks (`RELATED-TO`), tag sync, per-request rate limiting.
