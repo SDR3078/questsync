@@ -21,7 +21,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write      # write the image-tag bump back to the manifest (GitOps)
       packages: write      # push to GHCR with the built-in GITHUB_TOKEN
       id-token: write       # provenance/SBOM attestations
       attestations: write
@@ -60,3 +60,20 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: true
           sbom: true
+
+      # GitOps write-back: point the manifest at the image we just built and
+      # commit it, so ArgoCD rolls the new pod. GITHUB_TOKEN pushes don't
+      # re-trigger CI (and [skip ci] belt-and-suspenders), so there's no loop.
+      - name: Roll deployed image tag
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          TAG=$(printf '%s\n' "${{ steps.meta.outputs.tags }}" | grep -oE 'sha-[0-9a-f]+' | head -1)
+          [ -n "$TAG" ] || { echo "no sha- tag in metadata outputs"; exit 1; }
+          sed -i -E "s#(image: ghcr.io/sdr3078/questsync:)sha-[0-9a-f]+#\1${TAG}#" deploy/k8s/deployment.yaml
+          if git diff --quiet -- deploy/k8s/deployment.yaml; then
+            echo "deployment already pinned to ${TAG}; nothing to roll"; exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "deploy: roll image to ${TAG} [skip ci]" -- deploy/k8s/deployment.yaml
+          git push origin HEAD:main
