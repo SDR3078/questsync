@@ -1,0 +1,13 @@
+# Runtime state (also lives in a docker volume)
+/data/
+
+# Local env / secrets
+.env
+*.env
+!*.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/

@@ -1,0 +1,23 @@
+services:
+  radicale:
+    build: .
+    image: questsync-radicale:prove0
+    container_name: questsync-radicale
+    ports:
+      - "5232:5232"
+    environment:
+      # Make our storage plugin importable as `questsync.radicale_storage`.
+      - PYTHONPATH=/app
+      # Habitica credentials — empty => offline DEMO mode. Put real values in a
+      # git-ignored .env file (see .env.example); compose interpolates them here.
+      - HABITICA_USER_ID=${HABITICA_USER_ID:-}
+      - HABITICA_API_TOKEN=${HABITICA_API_TOKEN:-}
+      - HABITICA_CLIENT=${HABITICA_CLIENT:-}
+      - QUESTSYNC_TASK_TYPES=${QUESTSYNC_TASK_TYPES:-todos,dailys}
+      - QUESTSYNC_CACHE_TTL=${QUESTSYNC_CACHE_TTL:-30}
+    volumes:
+      # Live-editable config (restart the container to apply changes).
+      - ./radicale/config:/etc/radicale/config:ro
+      # Our custom storage plugin source (bind-mounted for fast iteration).
+      - ./src:/app:ro
+    restart: unless-stopped

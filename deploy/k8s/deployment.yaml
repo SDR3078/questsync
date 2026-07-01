@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: questsync
+  labels:
+    app: questsync
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: questsync
+  template:
+    metadata:
+      labels:
+        app: questsync
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: questsync
+          image: ghcr.io/sdr3078/questsync:latest   # built + pushed by CI
+          ports:
+            - name: caldav
+              containerPort: 5232
+          envFrom:
+            - secretRef:
+                name: questsync-habitica            # HABITICA_USER_ID / _API_TOKEN
+          env:
+            - name: QUESTSYNC_TASK_TYPES
+              value: "todos,dailys"
+            - name: QUESTSYNC_CACHE_TTL
+              value: "30"
+          readinessProbe:
+            httpGet: { path: /.web/, port: caldav }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /.web/, port: caldav }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 25m, memory: 64Mi }
+            limits: { cpu: 200m, memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

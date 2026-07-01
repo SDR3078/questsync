@@ -1,0 +1,27 @@
+# ⚠️  SECURITY: QuestSync currently runs Radicale with `auth = none`. Do NOT
+# expose it via this Ingress until DAV auth is enabled (htpasswd, or a custom
+# BaseAuth that validates against Habitica). Until then, reach it in-cluster
+# (Service :5232) or via `kubectl port-forward`. This file is deliberately left
+# out of kustomization.yaml.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: questsync
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: ["questsync.example.com"]
+      secretName: questsync-tls
+  rules:
+    - host: questsync.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: questsync
+                port:
+                  number: 5232

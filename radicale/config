@@ -1,0 +1,28 @@
+# Radicale 3.x — Prove-0 baseline configuration.
+# Deliberately minimal and insecure (auth=none): we are proving the ENVIRONMENT
+# (networking, the CalDAV task-list collection, a client round-trip), not our
+# code and not security. Auth gets hardened in a later step.
+
+[server]
+hosts = 0.0.0.0:5232
+
+[auth]
+# "none" trusts whatever username the client sends via HTTP Basic auth and
+# accepts any password. Enough to prove connectivity; replaced with htpasswd later.
+type = none
+
+[storage]
+# QuestSync's filesystem-free backend. Radicale imports the class named
+# `Storage` from this dotted module path (must be importable via PYTHONPATH).
+type = questsync.radicale_storage
+
+[rights]
+# Each user may read/write only their own /<user>/... collections.
+type = owner_only
+
+[web]
+# Built-in web UI at http://localhost:5232/.web/ for eyeballing collections.
+type = internal
+
+[logging]
+level = info
