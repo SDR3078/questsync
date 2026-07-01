@@ -17,6 +17,7 @@ import time
 from radicale.auth import BaseAuth
 
 from questsync import credstore
+from questsync.access import get_policy
 from questsync.habitica import HabiticaClient, HabiticaRateLimited
 from questsync.settings import DEMO
 
@@ -26,6 +27,9 @@ _TTL = float(os.environ.get("QUESTSYNC_LOGIN_TTL", "300"))
 
 _lock = threading.Lock()
 _cache = {}                       # login -> (password_hash, ok, expiry_monotonic)
+
+# Access gate (QUESTSYNC_ACCESS_POLICY): allowall (default) / allowlist / http.
+_POLICY = get_policy()
 
 
 def _hash(password):
@@ -38,6 +42,12 @@ class Auth(BaseAuth):
             credstore.put(login, password or "demo")
             return login
         if not login or not password:
+            return ""
+
+        # Gate on the User ID BEFORE any Habitica call: a denied user never
+        # touches Habitica (no credential-testing oracle, no wasted egress). A
+        # transient policy error propagates as retry, never caches as a deny.
+        if not _POLICY.check(login):
             return ""
 
         now = time.monotonic()

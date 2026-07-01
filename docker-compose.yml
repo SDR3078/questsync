@@ -17,6 +17,12 @@ services:
       - QUESTSYNC_CACHE_TTL=${QUESTSYNC_CACHE_TTL:-30}
       # Optional fixed x-client author id (defaults to each user's own id).
       - QUESTSYNC_CLIENT_AUTHOR=${QUESTSYNC_CLIENT_AUTHOR:-}
+      # Access gate — default (unset) allows anyone with valid Habitica creds.
+      # allowlist/http restrict who may log in (see .env.example / docs).
+      - QUESTSYNC_ACCESS_POLICY=${QUESTSYNC_ACCESS_POLICY:-}
+      - QUESTSYNC_ALLOWLIST=${QUESTSYNC_ALLOWLIST:-}
+      - QUESTSYNC_ALLOWLIST_FILE=${QUESTSYNC_ALLOWLIST_FILE:-}
+      - QUESTSYNC_ACCESS_HTTP_URL=${QUESTSYNC_ACCESS_HTTP_URL:-}
     volumes:
       # Live-editable config (restart the container to apply changes).
       - ./radicale/config:/etc/radicale/config:ro
