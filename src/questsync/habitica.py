@@ -53,8 +53,24 @@ def _demo_fixture():
     ]
 
 
+_demo_store = None
+
+
+def _shared_demo_store():
+    """Process-wide demo fixture, shared across (request-scoped) demo clients so
+    demo writes persist even though real clients are rebuilt per request."""
+    global _demo_store
+    if _demo_store is None:
+        _demo_store = {t["_id"]: t for t in _demo_fixture()}
+    return _demo_store
+
+
 class HabiticaError(RuntimeError):
     pass
+
+
+class HabiticaRateLimited(HabiticaError):
+    """Raised on HTTP 429 — a rate limit, NOT an invalid credential."""
 
 
 class HabiticaClient:
@@ -64,7 +80,7 @@ class HabiticaClient:
         self.demo = demo
         self._max_retries = max_retries
         if demo:
-            self._fixture = {t["_id"]: t for t in _demo_fixture()}
+            self._fixture = _shared_demo_store()
         else:
             self._session = requests.Session()
             self._session.headers.update({
@@ -73,12 +89,14 @@ class HabiticaClient:
                 "content-type": "application/json"})
 
     def validate(self):
-        """True iff these credentials authenticate against Habitica."""
+        """True iff these credentials authenticate; re-raises on rate limit."""
         if self.demo:
             return True
         try:
             self._request("GET", "/user", params={"userFields": "_id"})
             return True
+        except HabiticaRateLimited:
+            raise                      # transient: do NOT report as invalid
         except HabiticaError:
             return False
 
@@ -95,6 +113,8 @@ class HabiticaClient:
                 time.sleep(2 ** attempt)
                 continue
             break
+        if resp.status_code == 429:
+            raise HabiticaRateLimited("rate limited: %s %s" % (method, path))
         if not resp.ok:
             raise HabiticaError("%s %s -> %s" % (method, path, resp.status_code))
         body = resp.json()

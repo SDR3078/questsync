@@ -3,10 +3,11 @@
 Each DAV principal `<user>` is a Habitica User ID (see radicale_auth.py). For a
 request under `/<user>/...`, storage builds that user's HabiticaClient from the
 token cached in `credstore` and serves only their tasks. `[rights] owner_only`
-guarantees a user can only reach their own path. One source of truth (Habitica)
-=> no state store. See docs/design.md.
+isolates each user. One source of truth (Habitica) => no state store.
 
-Layout:  ""  root · "<user>"  principal · "<user>/todos" · "<user>/dailys"
+Credentials are request-scoped via thread-local state (see credstore); each
+HabiticaClient is built fresh per call so none pins a token past its request
+(this also picks up a rotated token immediately). See docs/design.md.
 """
 import contextlib
 import os
@@ -18,18 +19,14 @@ from radicale.storage import BaseStorage, BaseCollection
 
 from questsync import convert, credstore
 from questsync.habitica import HabiticaClient
+from questsync.settings import DEMO
 
-HTTP_DT = "%a, %d %b %Y %H:%M:%S GMT"
 _DISPLAY = {"todos": "Habitica To-Dos", "dailys": "Habitica Dailies"}
 _SINGULAR = {"todos": "todo", "dailys": "daily"}
 
 
 def _parts(path):
     return [p for p in path.strip("/").split("/") if p]
-
-
-def _now_http():
-    return time.strftime(HTTP_DT, time.gmtime())
 
 
 class Collection(BaseCollection):
@@ -51,7 +48,13 @@ class Collection(BaseCollection):
 
     @property
     def last_modified(self):
-        return _now_http()
+        # Deterministic: newest task updatedAt, else epoch (never wall-clock).
+        user, cid = self._user(), self._coll_id()
+        if cid in self._storage.collection_ids:
+            stamps = [t.get("updatedAt") for t in self._storage.tasks(user, cid)
+                      if t.get("updatedAt")]
+            return convert.http_date(max(stamps) if stamps else convert.EPOCH_ISO)
+        return convert.http_date(convert.EPOCH_ISO)
 
     # --- read path --------------------------------------------------------
     def _items(self):
@@ -68,7 +71,8 @@ class Collection(BaseCollection):
                 text = convert.todo_to_ics(task)
             href = (task.get("alias") or task["_id"]) + ".ics"
             out.append(radicale_item.Item(
-                collection=self, href=href, text=text, last_modified=_now_http()))
+                collection=self, href=href, text=text,
+                last_modified=convert.task_lastmod(task)))
         return out
 
     def get_all(self):
@@ -98,12 +102,12 @@ class Collection(BaseCollection):
         client = self._storage.client_for(user)
         existing = self._storage.find_task(user, cid, stem)
 
-        if existing is None:                       # client-created task
+        if existing is None:
             task = client.create_task(_SINGULAR.get(cid, "todo"), fields,
                                       alias=convert.safe_alias(stem))
             if completed:
                 client.score(task["_id"], "up")
-        else:                                      # edit / (un)complete
+        else:
             task = client.update_task(existing["_id"], fields)
             if completed and not existing.get("completed"):
                 client.score(existing["_id"], "up")
@@ -114,7 +118,7 @@ class Collection(BaseCollection):
 
         text = convert.daily_to_ics(task) if cid == "dailys" else convert.todo_to_ics(task)
         return radicale_item.Item(collection=self, href=href, text=text,
-                                  last_modified=_now_http()), None
+                                  last_modified=convert.task_lastmod(task)), None
 
     def delete(self, href=None):
         user, cid = self._user(), self._coll_id()
@@ -134,7 +138,7 @@ class Storage(BaseStorage):
     def __init__(self, configuration):
         super().__init__(configuration)
         self._lock = threading.RLock()
-        self._demo = os.environ.get("QUESTSYNC_DEMO") == "1"
+        self._demo = DEMO
         self._base = os.environ.get("HABITICA_BASE_URL",
                                     "https://habitica.com/api/v3")
         self._author = os.environ.get("QUESTSYNC_CLIENT_AUTHOR", "")
@@ -142,25 +146,18 @@ class Storage(BaseStorage):
                                os.environ.get("QUESTSYNC_TASK_TYPES", "todos,dailys")
                                .split(",") if t.strip()]
         self._ttl = float(os.environ.get("QUESTSYNC_CACHE_TTL", "30"))
-        self._clients = {}                         # user -> HabiticaClient
         self._cache = {}                           # (user, cid) -> (tasks, at)
 
-    # per-user client + cache ---------------------------------------------
     def client_for(self, user):
-        with self._lock:
-            client = self._clients.get(user)
-            if client is None:
-                if self._demo:
-                    client = HabiticaClient(user, demo=True)
-                else:
-                    token = credstore.get(user)
-                    if not token:
-                        raise RuntimeError("no cached credentials for %r" % user)
-                    header = "%s-questsync" % (self._author or user)
-                    client = HabiticaClient(user, token, client_header=header,
-                                            base_url=self._base)
-                self._clients[user] = client
-            return client
+        # Built fresh per call from the request's thread-local token, so a
+        # rotated token is used immediately and no client pins one across requests.
+        if self._demo:
+            return HabiticaClient(user, demo=True)
+        token = credstore.get(user)
+        if not token:
+            raise RuntimeError("no cached credentials for %r" % user)
+        header = "%s-questsync" % (self._author or user)
+        return HabiticaClient(user, token, client_header=header, base_url=self._base)
 
     def tasks(self, user, cid):
         now = time.monotonic()
@@ -183,7 +180,6 @@ class Storage(BaseStorage):
                 return t
         return None
 
-    # discover -------------------------------------------------------------
     def discover(self, path, depth="0", child_context_manager=None,
                  user_groups=set()):
         parts = _parts(path)
@@ -198,10 +194,10 @@ class Storage(BaseStorage):
         yield coll
         if depth == "0":
             return
-        if len(parts) == 1:                        # principal -> task lists
+        if len(parts) == 1:
             for cid in self.collection_ids:
                 yield Collection(self, parts[0] + "/" + cid)
-        elif len(parts) == 2:                      # task list -> items
+        elif len(parts) == 2:
             yield from coll.get_all()
 
     def move(self, item, to_collection, to_href):
@@ -212,6 +208,10 @@ class Storage(BaseStorage):
 
     @contextlib.contextmanager
     def acquire_lock(self, mode, user="", *args, **kwargs):
+        # Radicale serializes storage access via this lock. Credentials live in
+        # per-request thread-local state (see credstore) and are NOT evicted
+        # here: Radicale consumes discover() lazily, sometimes after this context
+        # exits, so the token must outlive the lock.
         with self._lock:
             yield
 

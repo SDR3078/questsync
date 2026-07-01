@@ -1,7 +1,9 @@
 services:
   radicale:
-    build: .
-    image: questsync-radicale:prove0
+    build:
+      context: .
+      target: dev            # local dev image (enables the build-gated demo mode)
+    image: questsync-radicale:dev
     container_name: questsync-radicale
     ports:
       - "5232:5232"

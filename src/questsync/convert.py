@@ -1,13 +1,21 @@
-"""Convert Habitica tasks <-> iCalendar VTODO. See docs/design.md section 4-5."""
+"""Convert Habitica tasks <-> iCalendar VTODO. See docs/design.md sections 4-5.
+
+Rendering is a PURE FUNCTION of Habitica state — no wall-clock. DTSTAMP and
+LAST-MODIFIED derive from the task's updatedAt, COMPLETED from dateCompleted.
+This keeps Radicale's ETag -> ctag -> sync-token stable across polls (so change
+detection and If-Match work) and makes replicas byte-identical.
+"""
 import re
-from datetime import datetime, timezone
+from datetime import timezone
 
 from dateutil import parser as dateparser
 
 # Habitica difficulty (priority field) -> VTODO PRIORITY (1 = high .. 9 = low).
 _DIFF_TO_PRIO = {0.1: 9, 1: 6, 1.5: 5, 2: 1}
-# Reverse: nearest Habitica difficulty for a given VTODO PRIORITY.
 _PRIO_BUCKETS = [(2, 2.0), (4, 1.5), (7, 1.0), (9, 0.1)]
+
+HTTP_DT_FMT = "%a, %d %b %Y %H:%M:%S GMT"
+EPOCH_ISO = "1970-01-01T00:00:00.000Z"
 
 
 def _esc(text):
@@ -23,12 +31,13 @@ def _ical_date(iso):
     return dateparser.isoparse(iso).strftime("%Y%m%d")
 
 
-def _now_utc():
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+def http_date(iso):
+    return dateparser.isoparse(iso).astimezone(timezone.utc).strftime(HTTP_DT_FMT)
 
 
-def _today_ical():
-    return datetime.now(timezone.utc).strftime("%Y%m%d")
+def task_lastmod(task):
+    """Deterministic HTTP Last-Modified for a task (from its updatedAt)."""
+    return http_date(task.get("updatedAt") or EPOCH_ISO)
 
 
 def safe_alias(stem):
@@ -38,11 +47,11 @@ def safe_alias(stem):
 
 
 def _vtodo_lines(task, extra):
-    """Common VTODO body shared by todos and dailies; `extra` is a list of lines."""
     uid = task.get("alias") or task["_id"]
     completed = bool(task.get("completed"))
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//questsync//v1//EN",
-             "BEGIN:VTODO", "UID:" + uid, "DTSTAMP:" + _now_utc(),
+             "BEGIN:VTODO", "UID:" + uid,
+             "DTSTAMP:" + _ical_utc(task.get("updatedAt") or EPOCH_ISO),
              "SUMMARY:" + _esc(task.get("text", ""))]
 
     desc = task.get("notes", "") or ""
@@ -57,15 +66,15 @@ def _vtodo_lines(task, extra):
     lines += extra
 
     if completed:
-        lines += ["STATUS:COMPLETED", "PERCENT-COMPLETE:100",
-                  "COMPLETED:" + (_ical_utc(task["dateCompleted"])
-                                  if task.get("dateCompleted") else _now_utc())]
+        lines += ["STATUS:COMPLETED", "PERCENT-COMPLETE:100"]
+        if task.get("dateCompleted"):                # deterministic; omit if absent
+            lines.append("COMPLETED:" + _ical_utc(task["dateCompleted"]))
     else:
         lines.append("STATUS:NEEDS-ACTION")
 
     prio = task.get("priority", 1)
     lines.append("PRIORITY:%d" % _DIFF_TO_PRIO.get(prio, 0))
-    lines.append("X-HABITICA-PRIORITY:%s" % prio)   # lossless round-trip
+    lines.append("X-HABITICA-PRIORITY:%s" % prio)    # lossless round-trip
     if task.get("createdAt"):
         lines.append("CREATED:" + _ical_utc(task["createdAt"]))
     if task.get("updatedAt"):
@@ -75,7 +84,6 @@ def _vtodo_lines(task, extra):
 
 
 def todo_to_ics(task):
-    """Habitica todo dict -> a full VCALENDAR/VTODO string."""
     extra = ["X-HABITICA-TYPE:todo"]
     if task.get("date"):
         extra.append("DUE;VALUE=DATE:" + _ical_date(task["date"]))
@@ -88,10 +96,10 @@ def daily_should_render(task):
 
 
 def daily_to_ics(task):
-    """Habitica daily -> VTODO for *today's* occurrence (no RRULE)."""
     extra = ["X-HABITICA-TYPE:daily"]
     due = task.get("nextDue") or []
-    extra.append("DUE;VALUE=DATE:" + (_ical_date(due[0]) if due else _today_ical()))
+    if due:                                          # deterministic; from Habitica
+        extra.append("DUE;VALUE=DATE:" + _ical_date(due[0]))
     if task.get("streak") is not None:
         extra.append("X-HABITICA-STREAK:%s" % task["streak"])
     return _vtodo_lines(task, extra)
@@ -120,12 +128,9 @@ def ics_to_habitica(vtodo):
     notes = _prop(vtodo, "description")
     if notes is not None:
         fields["notes"] = notes
-
     due = _prop(vtodo, "due")
     if due is not None and hasattr(due, "isoformat"):
         fields["date"] = due.isoformat()
-
-    # Prefer the lossless X-HABITICA-PRIORITY; else map back from PRIORITY.
     xprio = _prop(vtodo, "x_habitica_priority")
     if xprio is not None:
         try:
@@ -136,6 +141,5 @@ def ics_to_habitica(vtodo):
         prio = _prop(vtodo, "priority")
         if prio is not None:
             fields["priority"] = _prio_to_diff(int(prio))
-
     status = (_prop(vtodo, "status") or "").upper()
     return fields, status == "COMPLETED"
