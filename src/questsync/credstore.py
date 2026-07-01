@@ -28,6 +28,11 @@ def get(user):
     return None
 
 
+def current_user():
+    """The principal authenticated on this request's thread (or None)."""
+    return getattr(_local, "user", None)
+
+
 def forget(user):
     if getattr(_local, "user", None) == user:
         _local.user = None

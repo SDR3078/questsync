@@ -137,7 +137,7 @@ class Collection(BaseCollection):
 class Storage(BaseStorage):
     def __init__(self, configuration):
         super().__init__(configuration)
-        self._lock = threading.RLock()
+        self._cache_lock = threading.Lock()       # guards self._cache only
         self._demo = DEMO
         self._base = os.environ.get("HABITICA_BASE_URL",
                                     "https://habitica.com/api/v3")
@@ -148,9 +148,19 @@ class Storage(BaseStorage):
         self._ttl = float(os.environ.get("QUESTSYNC_CACHE_TTL", "30"))
         self._cache = {}                           # (user, cid) -> (tasks, at)
 
+    def _assert_owner(self, user):
+        # Defense-in-depth: tenant isolation must not hang solely on the
+        # owner_only rights config. The path's user must equal the authenticated
+        # principal (thread-local) before we ever touch that user's data.
+        authed = credstore.current_user()
+        if authed is None or authed != user:
+            raise RuntimeError("tenant isolation: path user %r != authenticated %r"
+                               % (user, authed))
+
     def client_for(self, user):
         # Built fresh per call from the request's thread-local token, so a
         # rotated token is used immediately and no client pins one across requests.
+        self._assert_owner(user)
         if self._demo:
             return HabiticaClient(user, demo=True)
         token = credstore.get(user)
@@ -160,19 +170,23 @@ class Storage(BaseStorage):
         return HabiticaClient(user, token, client_header=header, base_url=self._base)
 
     def tasks(self, user, cid):
-        now = time.monotonic()
+        self._assert_owner(user)
         key = (user, cid)
-        cached = self._cache.get(key)
-        if cached is None or (now - cached[1]) > self._ttl:
-            data = self.client_for(user).list_tasks(cid)
-            self._cache[key] = (data, now)
-            return data
-        return cached[0]
+        now = time.monotonic()
+        with self._cache_lock:
+            cached = self._cache.get(key)
+            if cached is not None and (now - cached[1]) <= self._ttl:
+                return cached[0]
+        data = self.client_for(user).list_tasks(cid)   # network I/O — no lock held
+        with self._cache_lock:
+            self._cache[key] = (data, time.monotonic())
+        return data
 
     def invalidate(self, user, cid=None):
-        for key in [k for k in self._cache if k[0] == user
-                    and (cid is None or k[1] == cid)]:
-            self._cache.pop(key, None)
+        with self._cache_lock:
+            for key in [k for k in self._cache if k[0] == user
+                        and (cid is None or k[1] == cid)]:
+                self._cache.pop(key, None)
 
     def find_task(self, user, cid, id_or_alias):
         for t in self.tasks(user, cid):
@@ -208,12 +222,11 @@ class Storage(BaseStorage):
 
     @contextlib.contextmanager
     def acquire_lock(self, mode, user="", *args, **kwargs):
-        # Radicale serializes storage access via this lock. Credentials live in
-        # per-request thread-local state (see credstore) and are NOT evicted
-        # here: Radicale consumes discover() lazily, sometimes after this context
-        # exits, so the token must outlive the lock.
-        with self._lock:
-            yield
+        # No global lock: the facade keeps no authoritative local state, so
+        # tenants run concurrently (one slow Habitica call no longer stalls
+        # everyone). The only shared mutable state — the task cache — is guarded
+        # by a short lock in tasks()/invalidate(), never held across network I/O.
+        yield
 
     def verify(self):
         return True

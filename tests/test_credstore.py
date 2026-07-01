@@ -15,3 +15,10 @@ def test_put_get_overwrite_forget():
     assert credstore.get("user-a") is None
 
     credstore.forget("user-a")                    # idempotent
+
+
+def test_current_user():
+    credstore.put("bob", "t")
+    assert credstore.current_user() == "bob"      # used for the isolation assert
+    credstore.forget("bob")
+    assert credstore.current_user() is None
