@@ -71,6 +71,19 @@ def test_safe_alias():
     assert convert.safe_alias("!!!") == "---"
 
 
+def test_client_alias_is_habitica_safe_and_reversible():
+    stem = "941ac6a4-e2bd-469f-bc78-c36d8de4b025"       # a Thunderbird-style UUID href
+    alias = convert.client_alias(stem)
+    assert alias == "qs-" + stem                        # prefixed -> not a bare UUID
+    assert convert.href_stem({"alias": alias}) == stem  # stripped back on read
+    assert convert.href_stem({"_id": "x", "alias": "mine"}) == "mine"  # user alias kept
+    assert convert.href_stem({"_id": "x"}) == "x"       # native task -> _id
+    # the rendered VTODO UID matches the (stripped) href, not the prefixed alias
+    ics = convert.todo_to_ics({"_id": "h1", "alias": alias, "text": "x",
+                               "updatedAt": "2026-07-01T07:00:00.000Z"})
+    assert "UID:" + stem in ics and "UID:qs-" not in ics
+
+
 def test_daily_materialization():
     due = {"_id": "d", "type": "daily", "text": "Meditate", "isDue": True,
            "completed": False, "nextDue": ["2026-07-01T00:00:00.000Z"],

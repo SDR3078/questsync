@@ -116,7 +116,12 @@ class HabiticaClient:
         if resp.status_code == 429:
             raise HabiticaRateLimited("rate limited: %s %s" % (method, path))
         if not resp.ok:
-            raise HabiticaError("%s %s -> %s" % (method, path, resp.status_code))
+            detail = ""
+            try:                                   # surface Habitica's reason (no token in the body)
+                detail = str(resp.json().get("message") or "")[:200]
+            except Exception:
+                detail = ""
+            raise HabiticaError("%s %s -> %s %s" % (method, path, resp.status_code, detail))
         body = resp.json()
         if not body.get("success", True):
             raise HabiticaError(str(body.get("message") or "request failed"))

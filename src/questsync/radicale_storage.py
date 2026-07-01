@@ -69,7 +69,7 @@ class Collection(BaseCollection):
                 text = convert.daily_to_ics(task)
             else:
                 text = convert.todo_to_ics(task)
-            href = (task.get("alias") or task["_id"]) + ".ics"
+            href = convert.href_stem(task) + ".ics"
             out.append(radicale_item.Item(
                 collection=self, href=href, text=text,
                 last_modified=convert.task_lastmod(task)))
@@ -103,8 +103,10 @@ class Collection(BaseCollection):
         existing = self._storage.find_task(user, cid, stem)
 
         if existing is None:
+            if not fields.get("text"):
+                fields["text"] = "Untitled"        # Habitica requires a title on create
             task = client.create_task(_SINGULAR.get(cid, "todo"), fields,
-                                      alias=convert.safe_alias(stem))
+                                      alias=convert.client_alias(stem))
             if completed:
                 client.score(task["_id"], "up")
         else:
@@ -189,8 +191,10 @@ class Storage(BaseStorage):
                 self._cache.pop(key, None)
 
     def find_task(self, user, cid, id_or_alias):
+        prefixed = convert.ALIAS_PREFIX + id_or_alias
         for t in self.tasks(user, cid):
-            if t.get("_id") == id_or_alias or t.get("alias") == id_or_alias:
+            alias = t.get("alias")
+            if t.get("_id") == id_or_alias or alias == id_or_alias or alias == prefixed:
                 return t
         return None
 

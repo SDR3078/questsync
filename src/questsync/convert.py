@@ -46,8 +46,29 @@ def safe_alias(stem):
     return alias or None
 
 
+# Client-created tasks are aliased with this prefix so the alias is never a bare
+# UUID — Habitica rejects UUID-shaped aliases (they collide with task ids at
+# /tasks/:idOrAlias). The prefix is stripped on read so the client keeps its href.
+ALIAS_PREFIX = "qs-"
+
+
+def client_alias(stem):
+    """Namespaced, Habitica-safe alias for a client-created task."""
+    base = re.sub(r"[^A-Za-z0-9_-]", "-", stem)[:57]
+    return (ALIAS_PREFIX + base) if base else None
+
+
+def href_stem(task):
+    """Resource stem to render a task at: the client's original stem for a
+    QuestSync-created task (strip the prefix), else the task's alias or _id."""
+    alias = task.get("alias")
+    if alias and alias.startswith(ALIAS_PREFIX):
+        return alias[len(ALIAS_PREFIX):]
+    return alias or task["_id"]
+
+
 def _vtodo_lines(task, extra):
-    uid = task.get("alias") or task["_id"]
+    uid = href_stem(task)                          # matches the resource href (prefix stripped)
     completed = bool(task.get("completed"))
     lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//questsync//v1//EN",
              "BEGIN:VTODO", "UID:" + uid,
