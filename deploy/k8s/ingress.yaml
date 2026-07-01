@@ -1,14 +1,19 @@
-# QuestSync enforces per-user auth (Habitica creds validated live). TLS is
-# MANDATORY here: credentials travel in HTTP Basic auth on every request, so
-# never serve this over plain HTTP. Set your real host below; cert-manager
-# issues the certificate. Kept out of kustomization.yaml so you opt in on
-# purpose after setting the hostname.
+# Ingress TEMPLATE — intentionally NOT listed in kustomization.yaml.
+#
+# TLS is MANDATORY: users' Habitica API tokens ride in HTTP Basic auth on every request,
+# so never serve QuestSync over plain HTTP. Set your own hostname + TLS secret below and
+# add this file to kustomization.yaml, or route HTTPS to the Service another way (e.g. a
+# tunnel). GitOps operators typically keep their real Ingress in their own cluster repo
+# rather than committing a hostname here.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: questsync
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
+    cert-manager.io/cluster-issuer: letsencrypt-prod      # your ClusterIssuer
+    # Habitica's rate-limit backoff can exceed nginx's default 60s proxy timeouts.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "90"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "90"
 spec:
   ingressClassName: nginx
   tls:

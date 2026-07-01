@@ -1,9 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# The sealed secret (questsync-habitica) and the Ingress are intentionally NOT
-# listed here — apply the secret out-of-band and only add ingress.yaml once DAV
-# auth is enabled (see deploy/README.md).
+# QuestSync is stateless and needs no app secret (each user brings their own Habitica
+# creds). ingress.yaml is a template — set your host/TLS and add it here, or route HTTPS
+# to the Service another way (see README.md).
 resources:
   - deployment.yaml
   - service.yaml
+  - networkpolicy.yaml

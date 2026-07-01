@@ -1,0 +1,49 @@
+# Contain the public QuestSync pod. It's internet-facing (behind an ingress controller)
+# and brokers live Habitica tokens, so it gets a default-deny baseline plus only the flows
+# it needs — stopping a compromised pod from reaching other workloads on the pod network.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  podSelector: {}                 # every pod in the namespace
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: questsync-allow
+spec:
+  podSelector:
+    matchLabels:
+      app: questsync
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Only ingress-nginx may reach the CalDAV port.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 5232
+  egress:
+    # DNS to CoreDNS (kube-system).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # HTTPS out to the Habitica API (the only upstream this facade calls).
+    - ports:
+        - protocol: TCP
+          port: 443

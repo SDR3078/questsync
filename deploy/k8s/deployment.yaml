@@ -14,13 +14,20 @@ spec:
       labels:
         app: questsync
     spec:
+      # This CalDAV facade never calls the Kubernetes API — don't hand it a token.
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault        # required by PodSecurity 'restricted'
       containers:
         - name: questsync
-          image: ghcr.io/sdr3078/questsync:latest   # built + pushed by CI
+          # Pinned to an immutable CI tag (docker/metadata type=sha); bump on release
+          # so ArgoCD detects the change. Never :latest — it drifts with no audit trail.
+          image: ghcr.io/sdr3078/questsync:sha-a857f8e
+          imagePullPolicy: IfNotPresent
           ports:
             - name: caldav
               containerPort: 5232
@@ -35,14 +42,25 @@ spec:
             httpGet: { path: /.web/, port: caldav }
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 3
           livenessProbe:
             httpGet: { path: /.web/, port: caldav }
             initialDelaySeconds: 10
             periodSeconds: 30
+            timeoutSeconds: 3
           resources:
             requests: { cpu: 25m, memory: 64Mi }
             limits: { cpu: 200m, memory: 128Mi }
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # Radicale's backend is filesystem-free (a live Habitica facade), so the only
+        # writable path needed under the read-only rootfs is /tmp for transient work.
+        - name: tmp
+          emptyDir: {}

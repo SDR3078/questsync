@@ -1,33 +1,49 @@
 # Deploying QuestSync
 
-QuestSync is **multi-user and stateless**: each person authenticates with their
-own Habitica credentials, so the deployment needs **no application secret** — just
-the image and a **TLS-terminating Ingress**.
+QuestSync is **multi-user and stateless** — each person authenticates with their own
+Habitica credentials, so the deployment needs **no application secret** and **no
+persistent volume**. You just run the (public) image and route **HTTPS** to it.
+
+## Manifests
+
+`deploy/k8s/` is a Kustomize base:
+
+| File | |
+|------|--|
+| `deployment.yaml` | the QuestSync pod — non-root, read-only rootfs, drops all caps, `seccompProfile: RuntimeDefault` (PodSecurity `restricted`-compatible); pins an immutable image tag |
+| `service.yaml` | ClusterIP on `:5232` |
+| `networkpolicy.yaml` | default-deny + allow ingress from your ingress controller and egress to DNS/HTTPS |
+| `ingress.yaml` | **template only** — not in `kustomization.yaml`; set your host + TLS and opt it in, or route to the Service another way |
+
+```bash
+kubectl apply -k deploy/k8s/          # deployment + service + networkpolicy
+```
 
 ## Image
-CI (`.github/workflows/ci.yml`) tests, builds, and pushes to
-`ghcr.io/sdr3078/questsync` on every push to `main`. Make the GHCR package
-**public** (GitHub → Packages → questsync → Package settings → Change visibility)
-so the cluster can pull it without an imagePullSecret.
 
-## Apply
-Via ArgoCD (recommended):
-```bash
-kubectl apply -f argocd-application.yaml
-```
-Or directly:
-```bash
-kubectl apply -k k8s/
-```
+CI (`.github/workflows/ci.yml`) builds and pushes `ghcr.io/sdr3078/questsync` (a **public**
+package — no imagePullSecret) on every push to `main`, tagging `:latest`, an immutable
+`:sha-<short>`, and `:v*` on releases.
+
+Pin an immutable `:sha-<short>` or `:v*` tag in `deployment.yaml` rather than `:latest`
+(which drifts silently and re-pulls on every restart with no audit trail).
 
 ## ⚠️ TLS is mandatory
-Users' Habitica API tokens travel in HTTP Basic auth on **every** request. Only
-expose QuestSync over HTTPS. Edit `k8s/ingress.yaml` with your real hostname and
-issuer; cert-manager provisions the certificate. Do **not** serve it over plain
-HTTP or add it to `kustomization.yaml` until the Ingress terminates TLS.
 
-## Image tag / GitOps note
-`deployment.yaml` pins `:latest`, which ArgoCD won't re-sync on its own (the
-manifest doesn't change when a new `:latest` is pushed). For real GitOps, pin the
-`sha-<short>` tag CI produces and bump it on release, or run **ArgoCD Image
-Updater**.
+Users' Habitica API tokens (password-equivalent) travel in HTTP Basic auth on **every**
+request. Only ever expose QuestSync over HTTPS — via an ingress + cert (e.g. cert-manager)
+or a tunnel that terminates TLS. If a reverse proxy re-encrypts to the origin, make sure it
+verifies **by hostname against a valid cert** — never disable cert verification or use a
+plaintext origin hop.
+
+## Hardening for public exposure
+
+QuestSync validates any Habitica user-id/token pair by calling Habitica live, from the
+pod's egress IP — so an open, unthrottled endpoint is a credential-validation oracle and a
+shared-egress DoS risk (spraying stolen pairs can get your egress IP rate-limited by
+Habitica, breaking every user). If you expose it to the internet, add **rate-limiting** and
+a **WAF** at your edge/ingress.
+
+## Local development
+
+See the repo root [`README.md`](../README.md) — `docker compose up`.

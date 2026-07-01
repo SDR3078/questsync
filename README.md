@@ -72,8 +72,11 @@ The server needs **no Habitica credentials of its own** — users bring theirs.
 
 ## Deploy to Kubernetes
 
-See [`deploy/`](deploy/) for k8s + ArgoCD manifests. No app secret is required
-(users bring their own creds); you only need a **TLS-terminating Ingress**.
+See [`deploy/`](deploy/) for the Kustomize manifests (Deployment, Service, Ingress,
+NetworkPolicy) and [`deploy/README.md`](deploy/README.md) for the runbook. No app secret
+is required (users bring their own creds) — you only need to route **HTTPS** to the
+Service (an ingress + cert, or a Cloudflare Tunnel). The reference deployment is
+GitOps-managed by ArgoCD and fronted by a Cloudflare Tunnel.
 
 ## Development
 
