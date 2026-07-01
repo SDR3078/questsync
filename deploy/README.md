@@ -1,20 +1,14 @@
 # Deploying QuestSync
 
+QuestSync is **multi-user and stateless**: each person authenticates with their
+own Habitica credentials, so the deployment needs **no application secret** — just
+the image and a **TLS-terminating Ingress**.
+
 ## Image
-CI (`.github/workflows/ci.yml`) tests and builds the image. Push it to a registry
-your cluster can pull (e.g. `ghcr.io/sdr3078/questsync:latest`) and update the
-`image:` in `k8s/deployment.yaml` if needed.
-
-## Secret (Habitica credentials)
-Never commit the plaintext token. Create a sealed secret:
-
-```bash
-kubectl create secret generic questsync-habitica \
-  --from-literal=HABITICA_USER_ID=xxxxxxxx \
-  --from-literal=HABITICA_API_TOKEN=xxxxxxxx \
-  --dry-run=client -o yaml | kubeseal -o yaml > k8s/sealedsecret.yaml
-```
-Add `sealedsecret.yaml` to `k8s/kustomization.yaml` once created.
+CI (`.github/workflows/ci.yml`) tests, builds, and pushes to
+`ghcr.io/sdr3078/questsync` on every push to `main`. Make the GHCR package
+**public** (GitHub → Packages → questsync → Package settings → Change visibility)
+so the cluster can pull it without an imagePullSecret.
 
 ## Apply
 Via ArgoCD (recommended):
@@ -26,7 +20,14 @@ Or directly:
 kubectl apply -k k8s/
 ```
 
-## ⚠️ Before exposing publicly
-The bundled config uses `auth = none`. Enable DAV auth (htpasswd or a custom
-`BaseAuth`) **before** adding `k8s/ingress.yaml`. Until then, reach it in-cluster
-or with `kubectl port-forward svc/questsync 5232:5232`.
+## ⚠️ TLS is mandatory
+Users' Habitica API tokens travel in HTTP Basic auth on **every** request. Only
+expose QuestSync over HTTPS. Edit `k8s/ingress.yaml` with your real hostname and
+issuer; cert-manager provisions the certificate. Do **not** serve it over plain
+HTTP or add it to `kustomization.yaml` until the Ingress terminates TLS.
+
+## Image tag / GitOps note
+`deployment.yaml` pins `:latest`, which ArgoCD won't re-sync on its own (the
+manifest doesn't change when a new `:latest` is pushed). For real GitOps, pin the
+`sha-<short>` tag CI produces and bump it on release, or run **ArgoCD Image
+Updater**.

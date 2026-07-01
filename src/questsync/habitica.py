@@ -1,10 +1,9 @@
 """Minimal Habitica API v3 client for QuestSync (todos + dailies).
 
 Real mode talks to https://habitica.com/api/v3 with the three required headers
-(x-api-user, x-api-key, x-client). With no credentials it runs in offline DEMO
-mode from an in-memory fixture, so the plugin and full DAV flow work token-less.
+(x-api-user, x-api-key, x-client). `demo=True` serves an in-memory fixture so the
+plugin and full DAV flow work without any real account.
 """
-import os
 import time
 
 import requests
@@ -35,7 +34,6 @@ def _demo_fixture():
          "dateCompleted": "2026-06-30T18:00:00.000Z",
          "createdAt": "2026-06-28T08:00:00.000Z",
          "updatedAt": "2026-06-30T18:00:00.000Z"},
-        # --- dailies ---
         {"_id": "d1111111-1111-1111-1111-111111111111", "type": "daily",
          "text": "Meditate", "notes": "10 minutes", "completed": False,
          "isDue": True, "nextDue": ["2026-07-01T00:00:00.000Z"],
@@ -60,14 +58,12 @@ class HabiticaError(RuntimeError):
 
 
 class HabiticaClient:
-    """Talks to Habitica; degrades to an in-memory fixture with no creds."""
-
     def __init__(self, user_id="", api_token="", client_header="",
-                 base_url=DEFAULT_BASE_URL, max_retries=3):
+                 base_url=DEFAULT_BASE_URL, demo=False, max_retries=3):
         self.base_url = base_url.rstrip("/")
-        self.demo = not (user_id and api_token)
+        self.demo = demo
         self._max_retries = max_retries
-        if self.demo:
+        if demo:
             self._fixture = {t["_id"]: t for t in _demo_fixture()}
         else:
             self._session = requests.Session()
@@ -76,13 +72,15 @@ class HabiticaClient:
                 "x-client": client_header or ("%s-questsync" % user_id),
                 "content-type": "application/json"})
 
-    @classmethod
-    def from_env(cls, env=None):
-        env = env if env is not None else os.environ
-        return cls(user_id=env.get("HABITICA_USER_ID", ""),
-                   api_token=env.get("HABITICA_API_TOKEN", ""),
-                   client_header=env.get("HABITICA_CLIENT", ""),
-                   base_url=env.get("HABITICA_BASE_URL", DEFAULT_BASE_URL))
+    def validate(self):
+        """True iff these credentials authenticate against Habitica."""
+        if self.demo:
+            return True
+        try:
+            self._request("GET", "/user", params={"userFields": "_id"})
+            return True
+        except HabiticaError:
+            return False
 
     # ---- HTTP with retry/backoff (honors 429 Retry-After) ---------------
     def _request(self, method, path, **kwargs):
@@ -98,11 +96,10 @@ class HabiticaClient:
                 continue
             break
         if not resp.ok:
-            raise HabiticaError("%s %s -> %s: %s"
-                                % (method, path, resp.status_code, resp.text[:200]))
+            raise HabiticaError("%s %s -> %s" % (method, path, resp.status_code))
         body = resp.json()
         if not body.get("success", True):
-            raise HabiticaError(str(body.get("message") or body))
+            raise HabiticaError(str(body.get("message") or "request failed"))
         return body.get("data")
 
     # ---- task operations (collection id = "todos" | "dailys") -----------
@@ -124,7 +121,7 @@ class HabiticaClient:
         return self._request("GET", "/tasks/user/%s" % id_or_alias)
 
     def create_task(self, task_type, fields, alias=None):
-        payload = dict(fields, type=task_type)     # task_type: "todo" | "daily"
+        payload = dict(fields, type=task_type)
         if alias:
             payload["alias"] = alias
         if self.demo:
@@ -140,7 +137,6 @@ class HabiticaClient:
         if self.demo:
             t = self._fixture[task_id]
             t.update(fields)
-            t["updatedAt"] = "2026-07-01T00:00:00.000Z"
             return dict(t)
         return self._request("PUT", "/tasks/%s" % task_id, json=fields)
 

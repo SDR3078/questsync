@@ -24,9 +24,8 @@ spec:
           ports:
             - name: caldav
               containerPort: 5232
-          envFrom:
-            - secretRef:
-                name: questsync-habitica            # HABITICA_USER_ID / _API_TOKEN
+          # Multi-user: NO server-side Habitica creds — each user authenticates
+          # with their own Habitica User ID + API token as DAV credentials.
           env:
             - name: QUESTSYNC_TASK_TYPES
               value: "todos,dailys"

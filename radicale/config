@@ -7,9 +7,13 @@
 hosts = 0.0.0.0:5232
 
 [auth]
-# "none" trusts whatever username the client sends via HTTP Basic auth and
-# accepts any password. Enough to prove connectivity; replaced with htpasswd later.
-type = none
+# Multi-user: DAV login = Habitica User ID, password = Habitica API token,
+# validated live by our plugin (radicale_auth.py). Login results are cached so
+# we don't re-hit Habitica's /user endpoint on every DAV request.
+type = questsync.radicale_auth
+cache_logins = True
+cache_successful_logins_expiry = 300
+cache_failed_logins_expiry = 5
 
 [storage]
 # QuestSync's filesystem-free backend. Radicale imports the class named

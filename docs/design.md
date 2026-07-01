@@ -1,8 +1,9 @@
 # QuestSync — Design
 
-> Status: **Design** (Prove-0 and Prove-1 complete). This document is the plan
-> we build against. Facts about the Habitica API and Radicale interface below
-> are verified against the live API docs and Radicale 3.7.5 source.
+> Status: **Built** — v1.1 (todos + dailies) shipped, and now **multi-user**:
+> each user authenticates with their own Habitica creds (`radicale_auth.py` +
+> `credstore.py`), superseding §7's original "single-user" plan. This document
+> remains the design record. Facts verified against the live API and Radicale 3.7.5.
 
 ## 1. Architecture (recap)
 

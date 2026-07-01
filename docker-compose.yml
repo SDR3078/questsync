@@ -6,15 +6,15 @@ services:
     ports:
       - "5232:5232"
     environment:
-      # Make our storage plugin importable as `questsync.radicale_storage`.
       - PYTHONPATH=/app
-      # Habitica credentials — empty => offline DEMO mode. Put real values in a
-      # git-ignored .env file (see .env.example); compose interpolates them here.
-      - HABITICA_USER_ID=${HABITICA_USER_ID:-}
-      - HABITICA_API_TOKEN=${HABITICA_API_TOKEN:-}
-      - HABITICA_CLIENT=${HABITICA_CLIENT:-}
+      # Multi-user: the server holds NO account creds — each user authenticates
+      # with their own Habitica User ID + API token as DAV credentials.
+      # QUESTSYNC_DEMO=1 serves an offline fixture and accepts any login (dev/CI).
+      - QUESTSYNC_DEMO=${QUESTSYNC_DEMO:-}
       - QUESTSYNC_TASK_TYPES=${QUESTSYNC_TASK_TYPES:-todos,dailys}
       - QUESTSYNC_CACHE_TTL=${QUESTSYNC_CACHE_TTL:-30}
+      # Optional fixed x-client author id (defaults to each user's own id).
+      - QUESTSYNC_CLIENT_AUTHOR=${QUESTSYNC_CLIENT_AUTHOR:-}
     volumes:
       # Live-editable config (restart the container to apply changes).
       - ./radicale/config:/etc/radicale/config:ro
