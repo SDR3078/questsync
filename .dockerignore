@@ -4,3 +4,7 @@ data
 venv
 __pycache__
 *.md
+# Never let secrets into the build context (defense-in-depth; nothing COPYs them)
+.env
+*.env
+!.env.example
