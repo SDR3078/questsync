@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="light dark" />
+<title>QuestSync — Habitica in any calendar app</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Condensed:wght@700&family=Roboto+Mono:wght@500&family=Varela+Round&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --purple:#6133B4; --deep:#4F2A93; --darkest:#271B3D; --band:#432874;
+  --bright:#925CF3; --lav:#BDA8FF; --lavlt:#D5C8FF;
+  --white:#FFFFFF; --surface:#F9F9F9; --ink:#1A181D; --muted:#4E4A57;
+  --hp:#F74E52; --gold:#FFA624; --mana:#50B5E9; --gems:#24CC8F;
+  --btn-shadow: rgba(26,24,29,.12) 0 1px 3px 0, rgba(26,24,29,.24) 0 1px 2px 0;
+  --r:4px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; color:var(--lavlt);
+  font-family:'Roboto',system-ui,-apple-system,sans-serif;
+  font-size:16px; line-height:1.6;
+  background-color:var(--deep);
+  background-image:
+    radial-gradient(rgba(255,255,255,.055) 1px, transparent 1.4px),
+    linear-gradient(180deg,#6133B4 0%, #542CA0 42%, #4F2A93 72%, #432874 100%);
+  background-size:8px 8px, 100% 100%;
+  background-attachment:scroll, fixed;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+img{max-width:100%}
+a{color:#6133B4;text-decoration:none}
+a:hover{text-decoration:underline}
+
+.wrap{max-width:940px;margin:0 auto;padding:0 20px}
+
+/* ---- skip link ---- */
+.skip{position:absolute;left:-9999px;top:0;z-index:50;background:var(--gold);color:#271B3D;
+  font-weight:700;padding:10px 16px;border-radius:var(--r)}
+.skip:focus{left:12px;top:12px;text-decoration:none}
+
+/* ---- header ---- */
+.site{position:relative;z-index:5}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding-top:22px;padding-bottom:22px;flex-wrap:wrap}
+.brand{display:inline-flex;align-items:center;gap:11px;text-decoration:none}
+.brand:hover{text-decoration:none}
+.brand-mark{width:34px;height:34px;border-radius:9px;background:var(--white);
+  display:inline-flex;align-items:center;justify-content:center;
+  box-shadow:var(--btn-shadow);flex:0 0 34px}
+.brand-check{width:10px;height:18px;border:solid var(--gems);border-width:0 4px 4px 0;
+  transform:translateY(-2px) rotate(42deg)}
+.brand-word{font-family:'Varela Round',system-ui,sans-serif;font-size:24px;
+  color:#fff;letter-spacing:.2px;line-height:1}
+.brand-word span{color:var(--lav)}
+.nav{display:flex;gap:22px;align-items:center}
+.nav a{color:var(--lavlt);font-weight:700;font-size:14px}
+.nav a:hover{color:#fff;text-decoration:none}
+
+/* ---- buttons (Habitica exact) ---- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  font-family:'Roboto',sans-serif;font-weight:700;font-size:15px;line-height:1;
+  padding:9px 18px;border:none;border-radius:var(--r);cursor:pointer;
+  text-decoration:none;box-shadow:var(--btn-shadow);transition:background-color .15s ease, transform .05s ease}
+.btn:hover{text-decoration:none}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--bright);color:#fff}
+.btn-primary:hover{background:var(--purple)}
+.btn-secondary{background:var(--deep);color:#fff}
+.btn-secondary:hover{background:var(--darkest)}
+.btn-ghost{background:#F1ECFF;color:var(--deep)}
+.btn-ghost:hover{background:#E4DAFF}
+
+/* ---- shared display type on the purple field ---- */
+.eyebrow{font-family:'Roboto',sans-serif;font-weight:700;font-size:13px;
+  text-transform:uppercase;letter-spacing:.14em;color:var(--lav);margin:0 0 14px}
+.eyebrow.gold{color:var(--gold)}
+.display{font-family:'Varela Round',system-ui,sans-serif;font-weight:400;
+  color:#fff;font-size:clamp(30px,5vw,46px);line-height:1.14;margin:0}
+.section-head{text-align:center;max-width:620px;margin:0 auto 34px}
+.section-sub{color:var(--lavlt);margin:14px auto 0;max-width:520px}
+
+section{position:relative}
+.pad{padding:58px 0}
+
+/* ---- Habitica task-widget cards + checkboxes ---- */
+.task-check{width:34px;height:34px;flex:0 0 34px;border-radius:9px;
+  border:3px solid var(--lav);background:#fff;position:relative;margin-top:2px}
+/* checkmark: Habitica's own check.svg (assets/svg/check.svg) — filled, viewBox 0 0 16 16 */
+.task-check.done{border-color:transparent;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='white' fill-rule='evenodd' d='M6.54,13c-.3,0-.59-.13-.81-.35l-3.73-3.9,1.62-1.69,2.86,2.98L12.26,3l1.74,1.56L7.41,12.58c-.21,.25-.51,.4-.83,.42-.01,0-.03,0-.04,0Z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:center;background-size:72%}
+.check-blue{border-color:var(--mana)}
+.check-blue.done{background-color:var(--mana)}
+.check-gold{border-color:var(--gold)}
+.check-gold.done{background-color:var(--gold)}
+.check-gems.done{background-color:var(--gems)}
+
+.task-row{display:flex;gap:18px;background:var(--white);border-radius:10px;
+  border-left:7px solid var(--gems);padding:22px;
+  box-shadow: rgba(26,24,29,.18) 0 2px 4px 0, rgba(26,24,29,.28) 0 3px 12px -2px}
+.row-body{min-width:0;flex:1}
+
+/* ---- hero ---- */
+.hero .eyebrow{margin-bottom:16px}
+.hero-card{align-items:flex-start}
+.hero-checkbox{width:44px;height:44px;flex-basis:44px;border-radius:11px}
+.hero-card{border-left-color:var(--gems)}
+.hero h1{font-family:'Varela Round',system-ui,sans-serif;font-weight:400;
+  color:var(--deep);font-size:clamp(30px,5.4vw,50px);line-height:1.14;margin:2px 0 0;
+  letter-spacing:.1px}
+.lede{color:var(--muted);font-size:17px;margin:16px 0 0}
+.hero-cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}
+
+/* ---- pixel dividers ---- */
+.divider{height:26px;border:0;margin:0;padding:0;position:relative;z-index:1}
+.divider-check{
+  background:
+    repeating-conic-gradient(var(--darkest) 0% 25%, var(--band) 0% 50%);
+  background-size:16px 16px}
+.divider-check2{
+  background:
+    repeating-conic-gradient(var(--band) 0% 25%, #35205c 0% 50%);
+  background-size:12px 12px;height:20px}
+
+/* ---- how it works ---- */
+.steps{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+.step .row-body h3{margin:2px 0 4px}
+.step p{margin:0;color:var(--muted)}
+
+/* card headings on white (Roboto Condensed) */
+.task-row h3{font-family:'Roboto Condensed',system-ui,sans-serif;font-weight:700;
+  color:var(--deep);font-size:23px;line-height:1.12;margin:0}
+.task-row p{color:var(--muted)}
+.task-row p:first-of-type{margin-top:0}
+
+/* ---- plans ---- */
+.plans-grid{display:grid;gap:20px;grid-template-columns:minmax(0,1fr)}
+.plan .row-head{margin-bottom:12px}
+.plan h3{font-size:26px}
+.plan-free{border-left-color:var(--mana)}
+.plan-hosted{border-left-color:var(--gold)}
+.tag{font-family:'Roboto',sans-serif;font-weight:700;font-size:12px;
+  text-transform:uppercase;letter-spacing:.09em;margin:0 0 4px}
+.tag-free{color:#1f7fb0}
+.tag-hosted{color:#9a6400}
+.plan .btn{margin-top:6px}
+
+/* code block (generic mono — Roboto Mono is reserved for #uid) */
+.code{margin:14px 0;background:var(--darkest);color:#EBE3FF;border-radius:var(--r);
+  padding:14px 16px;overflow-x:auto;font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:13.5px;line-height:1.7;border-left:4px solid var(--bright)}
+.code code{white-space:pre;display:block}
+.code .cmt{color:#9d86d6}
+
+/* ---- hosted form block ---- */
+.hosted-body{margin-top:6px}
+.hosted-body label{display:block;font-family:'Roboto',sans-serif;font-weight:700;
+  color:var(--deep);font-size:15px;margin:4px 0 7px}
+#uid{width:100%;font-family:'Roboto Mono',ui-monospace,monospace;font-weight:500;
+  font-size:14px;color:var(--ink);background:#fff;padding:11px 13px;
+  border:2px solid var(--lav);border-radius:var(--r);letter-spacing:.2px}
+#uid::placeholder{color:#a49bb8}
+#uid:focus{outline:none;border-color:var(--bright);box-shadow:0 0 0 3px rgba(146,92,243,.35)}
+.hint{font-size:13px;color:var(--muted);margin:9px 0 0;line-height:1.55}
+.hint a{color:#6133B4;font-weight:700}
+.hint a:hover{text-decoration:underline}
+.hint strong{color:#9a6400}
+.field-error{color:#c0282c;font-weight:700;font-size:13.5px;margin:8px 0 0}
+.field-error:empty{display:none}
+#paypal-button-container{min-height:54px;margin-top:16px}
+.config-warn{margin-top:12px;font-size:13px;background:#FFF3D6;border:1px solid var(--gold);
+  color:#7a5300;border-radius:var(--r);padding:11px 13px;font-weight:500}
+#status{margin-top:14px;border-radius:var(--r);font-weight:700;font-size:15px;
+  max-height:0;padding:0 14px;opacity:0;overflow:hidden;
+  transition:max-height .3s ease,opacity .25s ease,padding .3s ease}
+#status.show{max-height:260px;opacity:1;padding:13px 14px}
+#status.err{background:#FFE1E2;border:2px solid var(--hp);color:#a11f22}
+#status.ok{background:#E1F8EF;border:2px solid var(--gems);color:#0d6b48;
+  box-shadow:0 0 0 4px rgba(36,204,143,.16)}
+#status.ok::before{content:"\2b50\00a0";}
+
+/* ---- trust ---- */
+.trust-card{display:flex;gap:16px;align-items:flex-start;background:rgba(39,27,61,.55);
+  border:1px solid rgba(189,168,255,.35);border-radius:10px;padding:20px 22px}
+.trust-card .task-check{margin-top:0}
+.trust-card p{margin:0;color:var(--lavlt)}
+.trust-card strong{color:#fff}
+
+/* ---- footer w/ pixel mountains ---- */
+.foot{margin-top:56px;position:relative}
+.mountains{height:130px;
+  background:linear-gradient(180deg,#33235c 0%, #271B3D 100%);
+  clip-path:polygon(
+    0% 100%,
+    0% 72%,6% 72%,6% 58%,12% 58%,12% 44%,18% 44%,18% 58%,24% 58%,24% 72%,
+    34% 72%,34% 54%,40% 54%,40% 36%,46% 36%,46% 20%,52% 20%,52% 36%,58% 36%,58% 54%,64% 54%,64% 72%,
+    74% 72%,74% 56%,80% 56%,80% 40%,86% 40%,86% 56%,92% 56%,92% 72%,
+    100% 72%,100% 100%);}
+.foot-body{background:var(--darkest);padding:26px 0 40px}
+.foot-inner{display:flex;flex-wrap:wrap;gap:18px 40px;justify-content:space-between;align-items:flex-start}
+.foot .brand-word{font-size:20px}
+.foot-links{display:flex;gap:20px;flex-wrap:wrap}
+.foot-links a{color:var(--lavlt);font-weight:700;font-size:14px}
+.foot-links a:hover{color:#fff;text-decoration:none}
+.disclaimer{color:#9d8fc4;font-size:12.5px;margin:18px 0 0;max-width:640px;line-height:1.6}
+
+/* ---- responsive ---- */
+@media (max-width:560px){
+  .nav{display:none}
+  .task-row{padding:18px;gap:14px}
+  .hero-cta .btn{flex:1 1 auto}
+  .foot-inner{flex-direction:column}
+}
+
+/* ---- a11y ---- */
+a:focus-visible,.btn:focus-visible,#uid:focus-visible,.code:focus-visible{
+  outline:3px solid var(--gold);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important;scroll-behavior:auto!important}
+  body{background-attachment:scroll}
+}
+@media (prefers-color-scheme:dark){
+  body{background-image:
+    radial-gradient(rgba(255,255,255,.05) 1px, transparent 1.4px),
+    linear-gradient(180deg,#542CA0 0%, #482786 45%, #3d236f 78%, #33205c 100%);}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site">
+  <div class="wrap bar">
+    <a class="brand" href="#top" aria-label="QuestSync home">
+      <span class="brand-mark" aria-hidden="true"><span class="brand-check"></span></span>
+      <span class="brand-word">Quest<span>Sync</span></span>
+    </a>
+    <nav class="nav" aria-label="Primary">
+      <a href="#how">How it works</a>
+      <a href="#plans">Plans</a>
+      <a href="https://github.com/SDR3078/questsync" target="_blank" rel="noopener">Docs</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero pad" id="top">
+    <div class="wrap">
+      <p class="eyebrow">A companion for your Habitica tasks</p>
+      <div class="task-row hero-card">
+        <div class="task-check check-gems done hero-checkbox" aria-hidden="true"></div>
+        <div class="row-body">
+          <h1>Tick your Habitica tasks from anywhere.</h1>
+          <p class="lede">QuestSync surfaces your Habitica to-dos and dailies in any CalDAV app &mdash; Tasks.org, Apple Reminders, Thunderbird, Nextcloud Tasks. Read them, check them off, done. Habitica stays the single source of truth; QuestSync is stateless and stores nothing.</p>
+          <div class="hero-cta">
+            <a class="btn btn-primary" href="#plans">Choose your path</a>
+            <a class="btn btn-ghost" href="#how">See how it works</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider divider-check" aria-hidden="true" />
+
+  <section class="pad" id="how">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Getting set up</p>
+        <h2 class="display">Three ticks to sync</h2>
+      </div>
+      <div class="steps">
+        <div class="task-row step">
+          <div class="task-check check-gems done" aria-hidden="true"></div>
+          <div class="row-body">
+            <h3>Add a CalDAV account</h3>
+            <p>In your calendar or tasks app, point a new CalDAV account at your QuestSync instance. Use your Habitica <strong>User ID</strong> as the username and your <strong>API token</strong> as the password.</p>
+          </div>
+        </div>
+        <div class="task-row step">
+          <div class="task-check check-gems done" aria-hidden="true"></div>
+          <div class="row-body">
+            <h3>See your to-dos &amp; dailies</h3>
+            <p>Your Habitica tasks appear as native items in Tasks.org, Apple Reminders, Thunderbird, Nextcloud Tasks &mdash; anywhere that speaks CalDAV.</p>
+          </div>
+        </div>
+        <div class="task-row step">
+          <div class="task-check check-gems done" aria-hidden="true"></div>
+          <div class="row-body">
+            <h3>Tick anywhere &mdash; Habitica stays canon</h3>
+            <p>Check a task off on your phone and it lands back in Habitica. QuestSync keeps no copy; Habitica remains the single source of truth for your to-dos and dailies.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider divider-check2" aria-hidden="true" />
+
+  <section class="pad" id="plans">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow gold">Two paths, one feed</p>
+        <h2 class="display">Choose your path</h2>
+        <p class="section-sub">Both deliver the exact same CalDAV feed. The only difference is who runs the server.</p>
+      </div>
+
+      <div class="plans-grid">
+        <div class="task-row plan plan-free">
+          <div class="task-check check-blue" aria-hidden="true"></div>
+          <div class="row-body">
+            <div class="row-head">
+              <p class="tag tag-free">Open source &middot; Free</p>
+              <h3>Self-host it</h3>
+            </div>
+            <p>Own the whole thing. Clone the repo and bring it up with one Docker command &mdash; it is open source and free forever.</p>
+            <pre class="code" tabindex="0" aria-label="Setup commands"><code>git clone https://github.com/SDR3078/questsync
+cd questsync
+docker compose up -d --build</code></pre>
+            <p>Then add a CalDAV account using your Habitica <strong>User ID</strong> as the username and your <strong>API token</strong> as the password.</p>
+            <a class="btn btn-secondary" href="https://github.com/SDR3078/questsync" target="_blank" rel="noopener">Read the docs</a>
+          </div>
+        </div>
+
+        <div class="task-row plan plan-hosted">
+          <div class="task-check check-gold" aria-hidden="true"></div>
+          <div class="row-body">
+            <div class="row-head">
+              <p class="tag tag-hosted">Hosted &middot; &euro;1 / month</p>
+              <h3>Let us host it</h3>
+            </div>
+            <p>Skip the setup. We run an always-on instance for you &mdash; just log in with your own Habitica credentials and start ticking. Enter your Habitica User ID to subscribe:</p>
+            <div class="hosted-body">
+<label for="uid">Your Habitica User ID</label>
+<input id="uid" type="text" inputmode="latin" autocomplete="off" spellcheck="false" placeholder="29bfa638-cb88-40e8-a0d0-48f455e7b2bd" aria-describedby="uid-hint uid-err" />
+<p class="hint" id="uid-hint">Find it at <a href="https://habitica.com/user/settings/api" target="_blank" rel="noopener">habitica.com &rarr; Settings &rarr; API</a> (the "User ID"). <strong>Double-check it</strong> &mdash; a typo means you'd pay but bind the wrong account, and you'd have to contact us to fix it.</p>
+<p class="field-error" id="uid-err" role="alert"></p>
+<div id="paypal-button-container"></div>
+<div id="config-warn" class="config-warn" hidden>This page isn't configured yet: set PAYPAL_CLIENT_ID and PLAN_ID in index.html.</div>
+<div id="status" role="status"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="trust-card" style="margin-top:28px">
+        <div class="task-check check-gems done" aria-hidden="true"></div>
+        <p><strong>Your API token never touches us.</strong> On both paths it travels straight from your app to Habitica &mdash; QuestSync is stateless and stores no data, tokens or tasks. Nothing to breach, nothing to leak.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="mountains" aria-hidden="true"></div>
+  <div class="foot-body">
+    <div class="wrap foot-inner">
+      <div>
+        <a class="brand" href="#top" aria-label="QuestSync home">
+          <span class="brand-mark" aria-hidden="true"><span class="brand-check"></span></span>
+          <span class="brand-word">Quest<span>Sync</span></span>
+        </a>
+        <p class="disclaimer">QuestSync is an independent, open-source project &mdash; not affiliated with, nor endorsed by, Habitica.</p>
+      </div>
+      <nav class="foot-links" aria-label="Footer">
+        <a href="#how">How it works</a>
+        <a href="#plans">Plans</a>
+        <a href="https://github.com/SDR3078/questsync" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://habitica.com/user/settings/api" target="_blank" rel="noopener">Get your User ID</a>
+      </nav>
+    </div>
+  </div>
+</footer>
+<script type="module">
+  import { encodeCustomId } from "./custom-id.js";
+
+  // ─── Fill these in ──────────────────────────────────────────────────────────
+  // Both values are PUBLIC (safe to commit): the client-id identifies your PayPal app,
+  // the plan-id the subscription plan. Nothing secret lives on this page.
+  const CONFIG = {
+    PAYPAL_CLIENT_ID: "AV-pdR0lULxuTEuSZUtsPNUZyM2WL7w9iVKGAbH6rDHFFDluIO0oJD1eCVMPBCc8AwL5BK4pgIxv-UBO", // sandbox client-id from developer.paypal.com
+    PLAN_ID: "P-7F239138M0464363LNJHE46I",      // sandbox: "WardStone QuestSync monthly" $3/mo
+    ENV: "sandbox",                            // "sandbox" | "production"
+    PRODUCT: "questsync",                       // MUST equal the product this PLAN_ID maps to in
+                                                // WardStone's WARDSTONE_PAYPAL_PLAN_MAP, or the gate
+                                                // parks the payment instead of binding it.
+  };
+  // ────────────────────────────────────────────────────────────────────────────
+  //
+  // NOTE ON SDK VERSION: this uses PayPal's v1 Buttons surface
+  // (paypal.Buttons + actions.subscription.create). PayPal now also ships a v6 SDK
+  // (createPayPalSubscriptionSession). The JS SDK is served from a rolling URL with no
+  // semver to pin, so we pin the *integration* instead: we only use the v1 Buttons API
+  // below. If you ever load v6, this button code changes shape.
+
+  const HABITICA_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  const uidInput = document.getElementById("uid");
+  const uidErr = document.getElementById("uid-err");
+  const statusEl = document.getElementById("status");
+
+  // Habitica User IDs are canonical lowercase UUIDs; normalise so a stray uppercase paste
+  // still binds the subject the CalDAV login (which uses the lowercase id) will look up.
+  const cleanUid = () => uidInput.value.trim().toLowerCase();
+  const uidValid = () => HABITICA_UUID.test(cleanUid());
+
+  function showStatus(kind, html) {
+    statusEl.className = "show " + kind;
+    statusEl.innerHTML = html;
+  }
+
+  if (CONFIG.PAYPAL_CLIENT_ID.endsWith("_HERE") || CONFIG.PLAN_ID.endsWith("_HERE")) {
+    document.getElementById("config-warn").hidden = false;
+  } else {
+    loadPayPalSdk().then(renderButton).catch(() =>
+      showStatus("err", "Couldn't load PayPal. Check your connection and reload."));
+  }
+
+  function loadPayPalSdk() {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      const q = new URLSearchParams({
+        "client-id": CONFIG.PAYPAL_CLIENT_ID,
+        vault: "true",           // required for subscriptions
+        intent: "subscription",
+        // no disable-funding: keep the "Debit or Credit Card" button alongside PayPal
+      });
+      s.src = "https://www.paypal.com/sdk/js?" + q.toString();
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  function renderButton() {
+    paypal.Buttons({
+      style: { layout: "vertical", shape: "rect", color: "gold", label: "subscribe" },
+
+      // Disable the button until a valid Habitica User ID is present.
+      onInit(data, actions) {
+        actions.disable();
+        const sync = () => {
+          if (uidValid()) { actions.enable(); uidErr.textContent = ""; }
+          else { actions.disable(); }
+        };
+        uidInput.addEventListener("input", sync);
+        sync();
+      },
+
+      // Final guard on click: surface a message rather than start a bad checkout.
+      onClick(data, actions) {
+        if (!uidValid()) {
+          uidErr.textContent = "Enter your Habitica User ID (a 36-character UUID) first.";
+          uidInput.focus();
+          return actions.reject();
+        }
+        return actions.resolve();
+      },
+
+      // Create the subscription entirely client-side, stamping the subject into custom_id.
+      createSubscription(data, actions) {
+        return actions.subscription.create({
+          plan_id: CONFIG.PLAN_ID,
+          custom_id: encodeCustomId(CONFIG.PRODUCT, cleanUid()),
+        });
+      },
+
+      // The subscription now EXISTS at PayPal. The authoritative entitlement is bound by
+      // WardStone when it receives the ACTIVATED webhook — this page never talks to it — so
+      // we promise "activates shortly", not "you're in".
+      onApprove(data) {
+        showStatus("ok",
+          "✅ <strong>Subscription created.</strong> Access activates within a minute. " +
+          "Add a CalDAV account in your app pointing at the hosted server, and log in with " +
+          "your Habitica <strong>User ID</strong> and <strong>API token</strong>. " +
+          "(Subscription id: <code>" + (data.subscriptionID || "?") + "</code>)");
+        uidInput.disabled = true;
+      },
+
+      onError() {
+        showStatus("err",
+          "Something went wrong starting the subscription. No charge was made — please try again.");
+      },
+    }).render("#paypal-button-container");
+  }
+</script>
+</body>
+</html>
