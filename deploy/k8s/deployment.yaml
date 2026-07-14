@@ -26,7 +26,7 @@ spec:
         - name: questsync
           # Pinned to an immutable CI tag (docker/metadata type=sha); bump on release
           # so ArgoCD detects the change. Never :latest — it drifts with no audit trail.
-          image: ghcr.io/sdr3078/questsync:sha-fa71404
+          image: ghcr.io/sdr3078/questsync:sha-7249aad
           imagePullPolicy: IfNotPresent
           ports:
             - name: caldav
