@@ -383,9 +383,9 @@ docker compose up -d --build</code></pre>
   // Both values are PUBLIC (safe to commit): the client-id identifies your PayPal app,
   // the plan-id the subscription plan. Nothing secret lives on this page.
   const CONFIG = {
-    PAYPAL_CLIENT_ID: "AV-pdR0lULxuTEuSZUtsPNUZyM2WL7w9iVKGAbH6rDHFFDluIO0oJD1eCVMPBCc8AwL5BK4pgIxv-UBO", // sandbox client-id from developer.paypal.com
-    PLAN_ID: "P-7F239138M0464363LNJHE46I",      // sandbox: "WardStone QuestSync monthly" $3/mo
-    ENV: "sandbox",                            // "sandbox" | "production"
+    PAYPAL_CLIENT_ID: "AX5T7wQn1sz_3C8oBzMSJuZuDUwmHXh2enLO8mQ0cOsQT0BaoYaBh6J1WsiAAmZQWxltT-CO1Lpzn2k7", // LIVE client-id (public) from developer.paypal.com
+    PLAN_ID: "P-4PB97377PF312135JNJOPKAA",      // live: "QuestSync monthly" €1/mo
+    ENV: "production",                         // "sandbox" | "production"
     PRODUCT: "questsync",                       // MUST equal the product this PLAN_ID maps to in
                                                 // WardStone's WARDSTONE_PAYPAL_PLAN_MAP, or the gate
                                                 // parks the payment instead of binding it.
